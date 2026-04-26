@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux 监控</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0f0f1a;
+    color: #c8d6e5;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+}
+header {
+    background: linear-gradient(135deg, #16213e, #1a1a2e);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    border-bottom: 1px solid #2a2a4a;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #00d2ff;
+}
+.header-info {
+    display: flex;
+    gap: 24px;
+    font-size: 13px;
+    color: #8899aa;
+}
+.header-info span { display: flex; align-items: center; gap: 6px; }
+.header-info .value { color: #c8d6e5; font-weight: 500; }
+#status-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-left: auto;
+}
+#status-dot.connected { background: #00e676; box-shadow: 0 0 6px #00e67688; }
+#status-dot.disconnected { background: #ff5252; box-shadow: 0 0 6px #ff525288; }
+.dashboard {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.card {
+    background: #16213e;
+    border-radius: 10px;
+    border: 1px solid #1e2d50;
+    overflow: hidden;
+}
+.card-title {
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #00d2ff;
+    border-bottom: 1px solid #1e2d50;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.card-body { padding: 12px; }
+.chart { width: 100%; height: 280px; }
+.chart-sm { height: 220px; }
+.chart-lg { height: 320px; }
+.row { display: flex; gap: 16px; }
+.row .card { flex: 1; }
+@media (max-width: 768px) {
+    .row { flex-direction: column; }
+    header { flex-wrap: wrap; }
+    .chart { height: 240px; }
+}
+.loading {
+    display: flex; align-items: center; justify-content: center;
+    height: 200px; color: #556; font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<header>
+    <h1>Linux 监控</h1>
+    <div class="header-info">
+        <span>主机：<span class="value" id="hostname">--</span></span>
+        <span>更新：<span class="value" id="last-update">--</span></span>
+        <span>数据点：<span class="value" id="point-count">0</span></span>
+    </div>
+    <span id="status-dot" class="disconnected"></span>
+</header>
+
+<main class="dashboard">
+
+<div class="card">
+    <div class="card-title">CPU 负载</div>
+    <div class="card-body"><div id="chart-cpu-load" class="chart"></div></div>
+</div>
+
+<div class="card">
+    <div class="card-title">CPU 核心使用率</div>
+    <div class="card-body"><div id="chart-cpu-usage" class="chart chart-lg"></div></div>
+</div>
+
+<div class="row">
+    <div class="card">
+        <div class="card-title">内存使用</div>
+        <div class="card-body" style="display:flex;gap:12px;flex-wrap:wrap;">
+            <div id="chart-mem-gauge" style="width:200px;height:200px;flex-shrink:0;"></div>
+            <div id="chart-mem-detail" style="flex:1;min-width:280px;height:200px;"></div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-title">网络流量</div>
+        <div class="card-body"><div id="chart-network" class="chart chart-sm"></div></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">软中断（每 CPU）</div>
+    <div class="card-body"><div id="chart-softirq" class="chart chart-lg"></div></div>
+</div>
+
+</main>
+
+<script>
+const MAX_POINTS = 30;
+
+const state = {
+    hostname: '',
+    times: [],
+    cpuLoad: { load1: [], load3: [], load15: [] },
+    cpuUsage: {},
+    cpuUsageExists: {},
+    memGauge: [],
+    memDetail: {},
+    netSeries: {},
+    netData: {},
+    softIrqSeries: {},
+    softIrqData: {},
+};
+
+// ─── Chart initialization ───
+
+const chartCpuLoad = echarts.init(document.getElementById('chart-cpu-load'), undefined, { renderer: 'canvas' });
+chartCpuLoad.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['1 分钟', '5 分钟', '15 分钟'], textStyle: { color: '#8899aa' } },
+    grid: { left: 50, right: 20, top: 40, bottom: 30 },
+    xAxis: { type: 'category', data: [], axisLabel: { color: '#556' } },
+    yAxis: { type: 'value', name: 'Load', nameTextStyle: { color: '#556' }, axisLabel: { color: '#889' } },
+    series: [
+        { name: '1 分钟', type: 'line', smooth: true, data: [], lineStyle: { width: 2 }, itemStyle: { color: '#ff6b6b' } },
+        { name: '5 分钟', type: 'line', smooth: true, data: [], lineStyle: { width: 2 }, itemStyle: { color: '#ffd93d' } },
+        { name: '15 分钟', type: 'line', smooth: true, data: [], lineStyle: { width: 2 }, itemStyle: { color: '#6bcb77' } },
+    ]
+});
+
+const chartCpuUsage = echarts.init(document.getElementById('chart-cpu-usage'), undefined, { renderer: 'canvas' });
+chartCpuUsage.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: [], textStyle: { color: '#8899aa' } },
+    grid: { left: 50, right: 20, top: 40, bottom: 30 },
+    xAxis: { type: 'category', data: [], axisLabel: { color: '#556' } },
+    yAxis: { type: 'value', name: '%', max: 100, nameTextStyle: { color: '#556' }, axisLabel: { color: '#889' } },
+    series: []
+});
+
+const chartMemGauge = echarts.init(document.getElementById('chart-mem-gauge'), undefined, { renderer: 'canvas' });
+chartMemGauge.setOption({
+    series: [{
+        type: 'gauge', center: ['50%', '55%'], radius: '85%',
+        min: 0, max: 100,
+        axisLine: {
+            lineStyle: { width: 12, color: [
+                [0.5, '#6bcb77'], [0.8, '#ffd93d'], [1, '#ff6b6b']
+            ]}
+        },
+        axisTick: { show: false },
+        splitLine: { show: false },
+        axisLabel: { show: false },
+        detail: {
+            formatter: '{value}%', fontSize: 20, color: '#c8d6e5',
+            offsetCenter: [0, '60%']
+        },
+        data: [{ value: 0 }]
+    }]
+});
+
+const chartMemDetail = echarts.init(document.getElementById('chart-mem-detail'), undefined, { renderer: 'canvas' });
+chartMemDetail.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: 90, right: 20, top: 10, bottom: 20 },
+    xAxis: { type: 'value', axisLabel: { color: '#889', formatter: '{value} GB' } },
+    yAxis: { type: 'category', data: [], axisLabel: { color: '#c8d6e5' } },
+    series: [{ type: 'bar', data: [], itemStyle: { color: '#00d2ff' }, barMaxWidth: 18 }]
+});
+
+const chartNetwork = echarts.init(document.getElementById('chart-network'), undefined, { renderer: 'canvas' });
+chartNetwork.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: [], textStyle: { color: '#8899aa' } },
+    grid: { left: 50, right: 20, top: 40, bottom: 30 },
+    xAxis: { type: 'category', data: [], axisLabel: { color: '#556' } },
+    yAxis: { type: 'value', name: 'KB/秒', nameTextStyle: { color: '#556' }, axisLabel: { color: '#889' } },
+    series: []
+});
+
+const chartSoftIrq = echarts.init(document.getElementById('chart-softirq'), undefined, { renderer: 'canvas' });
+chartSoftIrq.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { data: [], textStyle: { color: '#8899aa' } },
+    grid: { left: 50, right: 20, top: 40, bottom: 30 },
+    xAxis: { type: 'category', data: [], axisLabel: { color: '#556' } },
+    yAxis: { type: 'value', name: '中断/秒', nameTextStyle: { color: '#556' }, axisLabel: { color: '#889' } },
+    series: []
+});
+
+// ─── Resize handling ───
+
+const allCharts = [chartCpuLoad, chartCpuUsage, chartMemGauge, chartMemDetail, chartNetwork, chartSoftIrq];
+window.addEventListener('resize', () => allCharts.forEach(c => c.resize()));
+
+// ─── Color palette ───
+
+const COLORS = [
+    '#00d2ff', '#ff6b6b', '#ffd93d', '#6bcb77', '#a66cff',
+    '#ff8a5c', '#45b7d1', '#f472b6', '#84cc16', '#f59e0b',
+    '#10b981', '#6366f1', '#ec4899', '#14b8a6', '#f97316',
+];
+let colorIdx = 0;
+function nextColor() { const c = COLORS[colorIdx % COLORS.length]; colorIdx++; return c; }
+
+const SOFTIRQ_NAMES = ['hi', 'timer', 'net_tx', 'net_rx', 'block', 'irq_poll', 'tasklet', 'sched', 'hrtimer', 'rcu'];
+const SOFTIRQ_LABELS = ['HI', 'TIMER', 'NET_TX', 'NET_RX', 'BLOCK', 'IRQ_POLL', 'TASKLET', 'SCHED', 'HRTIMER', 'RCU'];
+const SOFTIRQ_COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#00d2ff','#a66cff','#ff8a5c','#45b7d1','#f472b6','#84cc16','#f59e0b'];
+
+// ─── Data update ───
+
+function updateDashboard(data) {
+    if (data.error) return;
+    const now = new Date();
+
+    if (data.name) {
+        state.hostname = data.name;
+        document.getElementById('hostname').textContent = data.name;
+    }
+    document.getElementById('last-update').textContent = now.toLocaleTimeString();
+    document.getElementById('status-dot').className = 'connected';
+
+    const timeLabel = now.toLocaleTimeString();
+    state.times.push(timeLabel);
+    if (state.times.length > MAX_POINTS) state.times.shift();
+    document.getElementById('point-count').textContent = state.times.length;
+
+    // ── CPU Load ──
+    if (data.cpu_load) {
+        const cl = data.cpu_load;
+        state.cpuLoad.load1.push(cl.load_avg_1);
+        state.cpuLoad.load3.push(cl.load_avg_3);
+        state.cpuLoad.load15.push(cl.load_avg_15);
+        if (state.cpuLoad.load1.length > MAX_POINTS) { state.cpuLoad.load1.shift(); state.cpuLoad.load3.shift(); state.cpuLoad.load15.shift(); }
+        chartCpuLoad.setOption({
+            xAxis: { data: state.times },
+            series: [
+                { data: state.cpuLoad.load1 },
+                { data: state.cpuLoad.load3 },
+                { data: state.cpuLoad.load15 },
+            ]
+        });
+    }
+
+    // ── CPU Usage per core ──
+    if (data.cpu_stat && data.cpu_stat.length) {
+        const cpuNames = data.cpu_stat.map(c => c.cpu_name);
+        // add new cores
+        cpuNames.forEach(name => {
+            if (!state.cpuUsage[name]) {
+                state.cpuUsage[name] = [];
+                state.cpuUsageExists[name] = true;
+            }
+        });
+        // push values
+        cpuNames.forEach((name, i) => {
+            state.cpuUsage[name].push(data.cpu_stat[i].cpu_percent);
+            if (state.cpuUsage[name].length > MAX_POINTS) state.cpuUsage[name].shift();
+        });
+        // build series
+        const series = cpuNames.map(name => ({
+            name, type: 'line', smooth: true,
+            data: [...state.cpuUsage[name]],
+            lineStyle: { width: 2 },
+        }));
+        chartCpuUsage.setOption({
+            legend: { data: cpuNames },
+            xAxis: { data: state.times },
+            series,
+        });
+    }
+
+    // ── Memory ──
+    if (data.mem_info) {
+        const mem = data.mem_info;
+        const usedPercent = mem.used_percent || 0;
+        state.memGauge.push(usedPercent);
+        if (state.memGauge.length > MAX_POINTS) state.memGauge.shift();
+
+        chartMemGauge.setOption({
+            series: [{ data: [{ value: Math.round(usedPercent * 10) / 10 }] }]
+        });
+
+        const memItems = [
+            { name: 'Total', value: mem.total },
+            { name: 'Used', value: mem.total && mem.free ? Math.round((mem.total - mem.free) * 100) / 100 : 0 },
+            { name: 'Free', value: mem.free },
+            { name: 'Available', value: mem.avail },
+            { name: 'Cached', value: mem.cached },
+            { name: 'Buffers', value: mem.buffers },
+        ];
+        chartMemDetail.setOption({
+            yAxis: { data: memItems.map(m => m.name).reverse() },
+            series: [{ data: memItems.map(m => m.value).reverse() }]
+        });
+    }
+
+    // ── Network ──
+    if (data.net_info && data.net_info.length) {
+        const netColors = {};
+        data.net_info.forEach((net, i) => {
+            const iface = net.name;
+            if (!state.netSeries[iface]) {
+                state.netSeries[iface] = { send: [], recv: [] };
+                state.netData[iface] = {};
+                netColors[iface] = [nextColor(), nextColor()];
+            }
+            state.netSeries[iface].send.push(net.send_rate || 0);
+            state.netSeries[iface].recv.push(net.rcv_rate || 0);
+            if (state.netSeries[iface].send.length > MAX_POINTS) {
+                state.netSeries[iface].send.shift();
+                state.netSeries[iface].recv.shift();
+            }
+        });
+        // Build legend and series
+        const legendData = [];
+        const series = [];
+        Object.keys(state.netSeries).forEach(iface => {
+            const sendName = iface + ' 发送';
+            const recvName = iface + ' 接收';
+            if (!state.netData[iface]) {
+                state.netData[iface] = {};
+                netColors[iface] = netColors[iface] || [nextColor(), nextColor()];
+            }
+            legendData.push(sendName, recvName);
+            series.push({
+                name: sendName, type: 'line', smooth: true,
+                data: [...state.netSeries[iface].send],
+                lineStyle: { width: 1.5 },
+                itemStyle: { color: netColors[iface] ? netColors[iface][0] : nextColor() },
+            });
+            series.push({
+                name: recvName, type: 'line', smooth: true,
+                data: [...state.netSeries[iface].recv],
+                lineStyle: { width: 1.5, type: 'dashed' },
+                itemStyle: { color: netColors[iface] ? netColors[iface][1] : nextColor() },
+            });
+        });
+        chartNetwork.setOption({ legend: { data: legendData }, xAxis: { data: state.times }, series });
+    }
+
+    // ── SoftIRQ ──
+    if (data.soft_irq && data.soft_irq.length) {
+        const cpuNames = data.soft_irq.map(s => s.cpu);
+
+        // Initialize data storage
+        if (!state.softIrqSeries._inited) {
+            cpuNames.forEach(cpu => {
+                state.softIrqSeries[cpu] = {};
+                SOFTIRQ_NAMES.forEach(sirq => { state.softIrqSeries[cpu][sirq] = []; });
+            });
+            state.softIrqSeries._inited = true;
+        }
+
+        data.soft_irq.forEach(s => {
+            const cpu = s.cpu;
+            if (!state.softIrqSeries[cpu]) {
+                state.softIrqSeries[cpu] = {};
+                SOFTIRQ_NAMES.forEach(sirq => { state.softIrqSeries[cpu][sirq] = []; });
+            }
+            SOFTIRQ_NAMES.forEach(sirq => {
+                const val = s[sirq] || 0;
+                state.softIrqSeries[cpu][sirq].push(val);
+                if (state.softIrqSeries[cpu][sirq].length > MAX_POINTS) state.softIrqSeries[cpu][sirq].shift();
+            });
+        });
+
+        // Build stacked bar chart per CPU
+        const sirqSeries = SOFTIRQ_NAMES.map((sirq, i) => ({
+            name: SOFTIRQ_LABELS[i],
+            type: 'bar',
+            stack: 'total',
+            data: cpuNames.map(cpu => {
+                const arr = state.softIrqSeries[cpu]?.[sirq];
+                return arr ? arr[arr.length - 1] || 0 : 0;
+            }),
+            itemStyle: { color: SOFTIRQ_COLORS[i] },
+        }));
+        chartSoftIrq.setOption({
+            legend: { data: SOFTIRQ_LABELS },
+            xAxis: { type: 'category', data: cpuNames },
+            series: sirqSeries,
+        });
+    }
+}
+
+// ─── WebSocket ───
+
+function connectWs() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${proto}//${location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        document.getElementById('status-dot').className = 'connected';
+    };
+
+    ws.onmessage = (e) => {
+        try {
+            const data = JSON.parse(e.data);
+            updateDashboard(data);
+        } catch (err) {
+            console.error('parse error', err);
+        }
+    };
+
+    ws.onclose = () => {
+        document.getElementById('status-dot').className = 'disconnected';
+        setTimeout(connectWs, 2000);
+    };
+
+    ws.onerror = () => { ws.close(); };
+}
+
+// ─── Initial load via REST, then connect WS ───
+
+fetch('/api/monitor')
+    .then(r => r.json())
+    .then(data => { updateDashboard(data); })
+    .catch(() => { document.getElementById('hostname').textContent = 'gRPC 服务器不可用'; })
+    .finally(() => { setTimeout(connectWs, 500); });
+
+</script>
+</body>
+</html>
