@@ -39,11 +39,28 @@ async def root():
 
 @app.get("/api/monitor")
 async def get_monitor():
+    """返回所有主机的监控数据"""
     try:
-        data = await app.state.stub.GetMonitorInfo(empty_pb2.Empty())
-        return MessageToDict(data, preserving_proto_field_name=True)
+        all_data = await app.state.stub.GetAllMonitorInfo(empty_pb2.Empty())
+        result = {"hosts": []}
+        for host_info in all_data.hosts:
+            host_dict = MessageToDict(host_info, preserving_proto_field_name=True)
+            host_dict["name"] = host_info.name
+            result["hosts"].append(host_dict)
+        return result
+    except grpc.aio.AioRpcError as e:
+        return {"error": f"gRPC server unavailable: {e.details()}"}
+
+
+@app.get("/api/hosts")
+async def get_hosts():
+    """返回所有主机名列表"""
+    try:
+        all_data = await app.state.stub.GetAllMonitorInfo(empty_pb2.Empty())
+        hostnames = [h.name for h in all_data.hosts if h.name]
+        return {"hosts": hostnames}
     except grpc.aio.AioRpcError:
-        return {"error": "gRPC server unavailable"}
+        return {"hosts": []}
 
 
 @app.websocket("/ws")
@@ -52,10 +69,13 @@ async def websocket_endpoint(ws: WebSocket):
     try:
         while True:
             try:
-                data = await app.state.stub.GetMonitorInfo(empty_pb2.Empty())
-                await ws.send_json(
-                    MessageToDict(data, preserving_proto_field_name=True)
-                )
+                all_data = await app.state.stub.GetAllMonitorInfo(empty_pb2.Empty())
+                result = {"hosts": []}
+                for host_info in all_data.hosts:
+                    host_dict = MessageToDict(host_info, preserving_proto_field_name=True)
+                    host_dict["name"] = host_info.name
+                    result["hosts"].append(host_dict)
+                await ws.send_json(result)
             except grpc.aio.AioRpcError:
                 await ws.send_json({"error": "gRPC server unavailable"})
             await asyncio.sleep(2)

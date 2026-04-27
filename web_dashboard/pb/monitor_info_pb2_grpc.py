@@ -46,6 +46,11 @@ class GrpcManagerStub(object):
                 request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
                 response_deserializer=monitor__info__pb2.MonitorInfo.FromString,
                 _registered_method=True)
+        self.GetAllMonitorInfo = channel.unary_unary(
+                '/monitor.proto.GrpcManager/GetAllMonitorInfo',
+                request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+                response_deserializer=monitor__info__pb2.AllMonitorInfo.FromString,
+                _registered_method=True)
 
 
 class GrpcManagerServicer(object):
@@ -66,6 +71,13 @@ class GrpcManagerServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetAllMonitorInfo(self, request, context):
+        """获取所有主机的监控信息
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_GrpcManagerServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -78,6 +90,11 @@ def add_GrpcManagerServicer_to_server(servicer, server):
                     servicer.GetMonitorInfo,
                     request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                     response_serializer=monitor__info__pb2.MonitorInfo.SerializeToString,
+            ),
+            'GetAllMonitorInfo': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAllMonitorInfo,
+                    request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                    response_serializer=monitor__info__pb2.AllMonitorInfo.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -135,6 +152,33 @@ class GrpcManager(object):
             '/monitor.proto.GrpcManager/GetMonitorInfo',
             google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
             monitor__info__pb2.MonitorInfo.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetAllMonitorInfo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/monitor.proto.GrpcManager/GetAllMonitorInfo',
+            google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            monitor__info__pb2.AllMonitorInfo.FromString,
             options,
             channel_credentials,
             insecure,

@@ -15,7 +15,7 @@ body {
 }
 header {
     background: linear-gradient(135deg, #16213e, #1a1a2e);
-    padding: 16px 32px;
+    padding: 12px 32px;
     display: flex;
     align-items: center;
     gap: 20px;
@@ -23,11 +23,13 @@ header {
     position: sticky;
     top: 0;
     z-index: 100;
+    flex-wrap: wrap;
 }
 header h1 {
     font-size: 20px;
     font-weight: 600;
     color: #00d2ff;
+    white-space: nowrap;
 }
 .header-info {
     display: flex;
@@ -45,10 +47,47 @@ header h1 {
 }
 #status-dot.connected { background: #00e676; box-shadow: 0 0 6px #00e67688; }
 #status-dot.disconnected { background: #ff5252; box-shadow: 0 0 6px #ff525288; }
+
+/* Host tabs */
+.host-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 32px 8px;
+    background: #16213e;
+    border-bottom: 1px solid #1e2d50;
+    flex-wrap: wrap;
+}
+.host-tab {
+    padding: 6px 16px;
+    border-radius: 6px 6px 0 0;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background: transparent;
+    color: #8899aa;
+    transition: all 0.15s;
+}
+.host-tab:hover {
+    background: #1a2a4a;
+    color: #c8d6e5;
+}
+.host-tab.active {
+    background: #0f0f1a;
+    border-color: #2a2a4a;
+    color: #00d2ff;
+    font-weight: 600;
+}
+.host-tab .host-count {
+    font-size: 10px;
+    color: #556;
+    margin-left: 4px;
+}
+
 .dashboard {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 16px 20px;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -91,12 +130,14 @@ header h1 {
 <header>
     <h1>Linux 监控</h1>
     <div class="header-info">
-        <span>主机：<span class="value" id="hostname">--</span></span>
+        <span>当前主机：<span class="value" id="hostname">--</span></span>
         <span>更新：<span class="value" id="last-update">--</span></span>
         <span>数据点：<span class="value" id="point-count">0</span></span>
     </div>
     <span id="status-dot" class="disconnected"></span>
 </header>
+
+<div class="host-tabs" id="host-tabs"></div>
 
 <main class="dashboard">
 
@@ -134,19 +175,43 @@ header h1 {
 <script>
 const MAX_POINTS = 30;
 
-const state = {
-    hostname: '',
-    times: [],
-    cpuLoad: { load1: [], load3: [], load15: [] },
-    cpuUsage: {},
-    cpuUsageExists: {},
-    memGauge: [],
-    memDetail: {},
-    netSeries: {},
-    netData: {},
-    softIrqSeries: {},
-    softIrqData: {},
-};
+// Per-host data state: data[hostname] = { times, cpuLoad, cpuUsage, ... }
+const data = {};
+let hostOrder = [];        // ordered list of hostnames
+let currentHost = null;
+
+const SOFTIRQ_NAMES = ['hi', 'timer', 'net_tx', 'net_rx', 'block', 'irq_poll', 'tasklet', 'sched', 'hrtimer', 'rcu'];
+const SOFTIRQ_LABELS = ['HI', 'TIMER', 'NET_TX', 'NET_RX', 'BLOCK', 'IRQ_POLL', 'TASKLET', 'SCHED', 'HRTIMER', 'RCU'];
+const SOFTIRQ_COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#00d2ff','#a66cff','#ff8a5c','#45b7d1','#f472b6','#84cc16','#f59e0b'];
+
+// ─── Helper: ensure host state exists ───
+
+function ensureHost(name) {
+    if (!data[name]) {
+        data[name] = {
+            times: [],
+            cpuLoad: { load1: [], load3: [], load15: [] },
+            cpuUsage: {},
+            cpuUsageExists: {},
+            memGauge: [],
+            netSeries: {},
+            netData: {},
+            softIrqSeries: { _inited: false },
+        };
+    }
+    if (!hostOrder.includes(name)) {
+        hostOrder.push(name);
+        renderHostTabs();
+    }
+}
+
+function getHost(name) {
+    return data[name] || null;
+}
+
+function currentState() {
+    return currentHost ? getHost(currentHost) : null;
+}
 
 // ─── Chart initialization ───
 
@@ -224,8 +289,6 @@ chartSoftIrq.setOption({
     series: []
 });
 
-// ─── Resize handling ───
-
 const allCharts = [chartCpuLoad, chartCpuUsage, chartMemGauge, chartMemDetail, chartNetwork, chartSoftIrq];
 window.addEventListener('resize', () => allCharts.forEach(c => c.resize()));
 
@@ -239,84 +302,162 @@ const COLORS = [
 let colorIdx = 0;
 function nextColor() { const c = COLORS[colorIdx % COLORS.length]; colorIdx++; return c; }
 
-const SOFTIRQ_NAMES = ['hi', 'timer', 'net_tx', 'net_rx', 'block', 'irq_poll', 'tasklet', 'sched', 'hrtimer', 'rcu'];
-const SOFTIRQ_LABELS = ['HI', 'TIMER', 'NET_TX', 'NET_RX', 'BLOCK', 'IRQ_POLL', 'TASKLET', 'SCHED', 'HRTIMER', 'RCU'];
-const SOFTIRQ_COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#00d2ff','#a66cff','#ff8a5c','#45b7d1','#f472b6','#84cc16','#f59e0b'];
+// ─── Host tabs ───
 
-// ─── Data update ───
+function renderHostTabs() {
+    const container = document.getElementById('host-tabs');
+    container.innerHTML = '';
+    hostOrder.forEach(name => {
+        const tab = document.createElement('button');
+        tab.className = 'host-tab' + (name === currentHost ? ' active' : '');
+        tab.textContent = name;
+        tab.onclick = () => selectHost(name);
+        container.appendChild(tab);
+    });
+    // Update host count in header info
+    document.getElementById('hostname').textContent = currentHost || '--';
+    document.getElementById('point-count').textContent = currentState()?.times?.length || 0;
+}
 
-function updateDashboard(data) {
-    if (data.error) return;
+function selectHost(name) {
+    if (name === currentHost || !data[name]) return;
+    currentHost = name;
+    renderHostTabs();
+    renderCurrentHostCharts();
+}
+
+// ─── Per-host data update ───
+
+function updateHostData(hostInfo) {
+    const name = hostInfo.name || 'unknown';
+    ensureHost(name);
+    const s = data[name];
+
     const now = new Date();
-
-    if (data.name) {
-        state.hostname = data.name;
-        document.getElementById('hostname').textContent = data.name;
-    }
-    document.getElementById('last-update').textContent = now.toLocaleTimeString();
-    document.getElementById('status-dot').className = 'connected';
-
     const timeLabel = now.toLocaleTimeString();
-    state.times.push(timeLabel);
-    if (state.times.length > MAX_POINTS) state.times.shift();
-    document.getElementById('point-count').textContent = state.times.length;
+    s.times.push(timeLabel);
+    if (s.times.length > MAX_POINTS) s.times.shift();
 
-    // ── CPU Load ──
-    if (data.cpu_load) {
-        const cl = data.cpu_load;
-        state.cpuLoad.load1.push(cl.load_avg_1);
-        state.cpuLoad.load3.push(cl.load_avg_3);
-        state.cpuLoad.load15.push(cl.load_avg_15);
-        if (state.cpuLoad.load1.length > MAX_POINTS) { state.cpuLoad.load1.shift(); state.cpuLoad.load3.shift(); state.cpuLoad.load15.shift(); }
-        chartCpuLoad.setOption({
-            xAxis: { data: state.times },
-            series: [
-                { data: state.cpuLoad.load1 },
-                { data: state.cpuLoad.load3 },
-                { data: state.cpuLoad.load15 },
-            ]
+    // CPU Load
+    if (hostInfo.cpu_load) {
+        const cl = hostInfo.cpu_load;
+        s.cpuLoad.load1.push(cl.load_avg_1);
+        s.cpuLoad.load3.push(cl.load_avg_3);
+        s.cpuLoad.load15.push(cl.load_avg_15);
+        if (s.cpuLoad.load1.length > MAX_POINTS) {
+            s.cpuLoad.load1.shift(); s.cpuLoad.load3.shift(); s.cpuLoad.load15.shift();
+        }
+    }
+
+    // CPU Usage per core
+    if (hostInfo.cpu_stat && hostInfo.cpu_stat.length) {
+        hostInfo.cpu_stat.forEach(c => {
+            const coreName = c.cpu_name;
+            if (!s.cpuUsage[coreName]) {
+                s.cpuUsage[coreName] = [];
+                s.cpuUsageExists[coreName] = true;
+            }
+            s.cpuUsage[coreName].push(c.cpu_percent);
+            if (s.cpuUsage[coreName].length > MAX_POINTS) s.cpuUsage[coreName].shift();
         });
     }
 
-    // ── CPU Usage per core ──
-    if (data.cpu_stat && data.cpu_stat.length) {
-        const cpuNames = data.cpu_stat.map(c => c.cpu_name);
-        // add new cores
-        cpuNames.forEach(name => {
-            if (!state.cpuUsage[name]) {
-                state.cpuUsage[name] = [];
-                state.cpuUsageExists[name] = true;
+    // Memory
+    if (hostInfo.mem_info) {
+        const mem = hostInfo.mem_info;
+        const usedPercent = mem.used_percent || 0;
+        s.memGauge.push(usedPercent);
+        if (s.memGauge.length > MAX_POINTS) s.memGauge.shift();
+    }
+
+    // Network
+    if (hostInfo.net_info && hostInfo.net_info.length) {
+        hostInfo.net_info.forEach(net => {
+            const iface = net.name;
+            if (!s.netSeries[iface]) {
+                s.netSeries[iface] = { send: [], recv: [] };
+                s.netData[iface] = {};
+            }
+            s.netSeries[iface].send.push(net.send_rate || 0);
+            s.netSeries[iface].recv.push(net.rcv_rate || 0);
+            if (s.netSeries[iface].send.length > MAX_POINTS) {
+                s.netSeries[iface].send.shift();
+                s.netSeries[iface].recv.shift();
             }
         });
-        // push values
-        cpuNames.forEach((name, i) => {
-            state.cpuUsage[name].push(data.cpu_stat[i].cpu_percent);
-            if (state.cpuUsage[name].length > MAX_POINTS) state.cpuUsage[name].shift();
+    }
+
+    // SoftIRQ
+    if (hostInfo.soft_irq && hostInfo.soft_irq.length) {
+        if (!s.softIrqSeries._inited) {
+            hostInfo.soft_irq.forEach(sq => {
+                const cpu = sq.cpu;
+                s.softIrqSeries[cpu] = {};
+                SOFTIRQ_NAMES.forEach(sirq => { s.softIrqSeries[cpu][sirq] = []; });
+            });
+            s.softIrqSeries._inited = true;
+        }
+        hostInfo.soft_irq.forEach(sq => {
+            const cpu = sq.cpu;
+            if (!s.softIrqSeries[cpu]) {
+                s.softIrqSeries[cpu] = {};
+                SOFTIRQ_NAMES.forEach(sirq => { s.softIrqSeries[cpu][sirq] = []; });
+            }
+            SOFTIRQ_NAMES.forEach(sirq => {
+                const val = sq[sirq] || 0;
+                s.softIrqSeries[cpu][sirq].push(val);
+                if (s.softIrqSeries[cpu][sirq].length > MAX_POINTS) s.softIrqSeries[cpu][sirq].shift();
+            });
         });
-        // build series
+    }
+}
+
+// ─── Render charts for current host ───
+
+function renderCurrentHostCharts() {
+    const s = currentState();
+    if (!s) return;
+
+    document.getElementById('hostname').textContent = currentHost;
+    document.getElementById('point-count').textContent = s.times.length;
+
+    // CPU Load
+    chartCpuLoad.setOption({
+        xAxis: { data: s.times },
+        series: [
+            { data: s.cpuLoad.load1 },
+            { data: s.cpuLoad.load3 },
+            { data: s.cpuLoad.load15 },
+        ]
+    });
+
+    // CPU Usage
+    const cpuNames = Object.keys(s.cpuUsageExists);
+    if (cpuNames.length) {
         const series = cpuNames.map(name => ({
             name, type: 'line', smooth: true,
-            data: [...state.cpuUsage[name]],
+            data: [...s.cpuUsage[name]],
             lineStyle: { width: 2 },
         }));
         chartCpuUsage.setOption({
             legend: { data: cpuNames },
-            xAxis: { data: state.times },
+            xAxis: { data: s.times },
             series,
         });
     }
 
-    // ── Memory ──
-    if (data.mem_info) {
-        const mem = data.mem_info;
-        const usedPercent = mem.used_percent || 0;
-        state.memGauge.push(usedPercent);
-        if (state.memGauge.length > MAX_POINTS) state.memGauge.shift();
-
+    // Memory gauge
+    if (s.memGauge.length) {
+        const val = Math.round(s.memGauge[s.memGauge.length - 1] * 10) / 10;
         chartMemGauge.setOption({
-            series: [{ data: [{ value: Math.round(usedPercent * 10) / 10 }] }]
+            series: [{ data: [{ value: val }] }]
         });
+    }
 
+    // Memory detail - re-fetch from latest hostInfo (stored in latest raw data)
+    // We need mem_info from the most recent data point
+    if (s._latestMemInfo) {
+        const mem = s._latestMemInfo;
         const memItems = [
             { name: 'Total', value: mem.total },
             { name: 'Used', value: mem.total && mem.free ? Math.round((mem.total - mem.free) * 100) / 100 : 0 },
@@ -331,93 +472,87 @@ function updateDashboard(data) {
         });
     }
 
-    // ── Network ──
-    if (data.net_info && data.net_info.length) {
-        const netColors = {};
-        data.net_info.forEach((net, i) => {
-            const iface = net.name;
-            if (!state.netSeries[iface]) {
-                state.netSeries[iface] = { send: [], recv: [] };
-                state.netData[iface] = {};
-                netColors[iface] = [nextColor(), nextColor()];
-            }
-            state.netSeries[iface].send.push(net.send_rate || 0);
-            state.netSeries[iface].recv.push(net.rcv_rate || 0);
-            if (state.netSeries[iface].send.length > MAX_POINTS) {
-                state.netSeries[iface].send.shift();
-                state.netSeries[iface].recv.shift();
-            }
-        });
-        // Build legend and series
+    // Network
+    const ifaces = Object.keys(s.netSeries);
+    if (ifaces.length) {
         const legendData = [];
         const series = [];
-        Object.keys(state.netSeries).forEach(iface => {
+        colorIdx = 0;
+        ifaces.forEach(iface => {
             const sendName = iface + ' 发送';
             const recvName = iface + ' 接收';
-            if (!state.netData[iface]) {
-                state.netData[iface] = {};
-                netColors[iface] = netColors[iface] || [nextColor(), nextColor()];
-            }
+            const c1 = nextColor();
+            const c2 = nextColor();
             legendData.push(sendName, recvName);
             series.push({
                 name: sendName, type: 'line', smooth: true,
-                data: [...state.netSeries[iface].send],
+                data: [...s.netSeries[iface].send],
                 lineStyle: { width: 1.5 },
-                itemStyle: { color: netColors[iface] ? netColors[iface][0] : nextColor() },
+                itemStyle: { color: c1 },
             });
             series.push({
                 name: recvName, type: 'line', smooth: true,
-                data: [...state.netSeries[iface].recv],
+                data: [...s.netSeries[iface].recv],
                 lineStyle: { width: 1.5, type: 'dashed' },
-                itemStyle: { color: netColors[iface] ? netColors[iface][1] : nextColor() },
+                itemStyle: { color: c2 },
             });
         });
-        chartNetwork.setOption({ legend: { data: legendData }, xAxis: { data: state.times }, series });
+        chartNetwork.setOption({ legend: { data: legendData }, xAxis: { data: s.times }, series });
     }
 
-    // ── SoftIRQ ──
-    if (data.soft_irq && data.soft_irq.length) {
-        const cpuNames = data.soft_irq.map(s => s.cpu);
-
-        // Initialize data storage
-        if (!state.softIrqSeries._inited) {
-            cpuNames.forEach(cpu => {
-                state.softIrqSeries[cpu] = {};
-                SOFTIRQ_NAMES.forEach(sirq => { state.softIrqSeries[cpu][sirq] = []; });
-            });
-            state.softIrqSeries._inited = true;
-        }
-
-        data.soft_irq.forEach(s => {
-            const cpu = s.cpu;
-            if (!state.softIrqSeries[cpu]) {
-                state.softIrqSeries[cpu] = {};
-                SOFTIRQ_NAMES.forEach(sirq => { state.softIrqSeries[cpu][sirq] = []; });
-            }
-            SOFTIRQ_NAMES.forEach(sirq => {
-                const val = s[sirq] || 0;
-                state.softIrqSeries[cpu][sirq].push(val);
-                if (state.softIrqSeries[cpu][sirq].length > MAX_POINTS) state.softIrqSeries[cpu][sirq].shift();
-            });
-        });
-
-        // Build stacked bar chart per CPU
+    // SoftIRQ
+    const cpus = s.softIrqSeries._inited
+        ? Object.keys(s.softIrqSeries).filter(k => k !== '_inited')
+        : [];
+    if (cpus.length) {
+        const sortedCpus = cpus.sort();
         const sirqSeries = SOFTIRQ_NAMES.map((sirq, i) => ({
             name: SOFTIRQ_LABELS[i],
             type: 'bar',
             stack: 'total',
-            data: cpuNames.map(cpu => {
-                const arr = state.softIrqSeries[cpu]?.[sirq];
+            data: sortedCpus.map(cpu => {
+                const arr = s.softIrqSeries[cpu]?.[sirq];
                 return arr ? arr[arr.length - 1] || 0 : 0;
             }),
             itemStyle: { color: SOFTIRQ_COLORS[i] },
         }));
         chartSoftIrq.setOption({
             legend: { data: SOFTIRQ_LABELS },
-            xAxis: { type: 'category', data: cpuNames },
+            xAxis: { type: 'category', data: sortedCpus },
             series: sirqSeries,
         });
     }
+}
+
+// ─── Main update ───
+
+function updateDashboard(rawData) {
+    if (rawData.error) return;
+
+    const now = new Date();
+    document.getElementById('last-update').textContent = now.toLocaleTimeString();
+    document.getElementById('status-dot').className = 'connected';
+
+    const hosts = rawData.hosts || [];
+    if (hosts.length === 0) return;
+
+    hosts.forEach(hostInfo => {
+        // Store latest mem_info for detail chart
+        const name = hostInfo.name || 'unknown';
+        ensureHost(name);
+        if (hostInfo.mem_info) {
+            data[name]._latestMemInfo = hostInfo.mem_info;
+        }
+        updateHostData(hostInfo);
+    });
+
+    // Auto-select first host if none selected
+    if (!currentHost || !data[currentHost]) {
+        currentHost = hostOrder[0];
+        renderHostTabs();
+    }
+
+    renderCurrentHostCharts();
 }
 
 // ─── WebSocket ───
@@ -448,14 +583,18 @@ function connectWs() {
     ws.onerror = () => { ws.close(); };
 }
 
-// ─── Initial load via REST, then connect WS ───
+// ─── Initial load ───
 
 fetch('/api/monitor')
     .then(r => r.json())
-    .then(data => { updateDashboard(data); })
-    .catch(() => { document.getElementById('hostname').textContent = 'gRPC 服务器不可用'; })
-    .finally(() => { setTimeout(connectWs, 500); });
-
+    .then(data => {
+        updateDashboard(data);
+        setTimeout(connectWs, 500);
+    })
+    .catch(() => {
+        document.getElementById('hostname').textContent = 'gRPC 服务器不可用';
+        setTimeout(connectWs, 500);
+    });
 </script>
 </body>
 </html>

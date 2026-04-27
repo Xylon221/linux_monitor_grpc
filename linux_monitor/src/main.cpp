@@ -1,6 +1,7 @@
 #include <memory>
 #include <thread>
 #include <vector>
+#include <cstdlib>
 
 // 客户端RPC相关头文件
 #include "client/rpc_client.h"            // RPC客户端实现
@@ -39,7 +40,7 @@
  * 数据流：
  * 系统状态 → 监控器采集 → MonitorInfo消息 → RPC客户端 → 远程服务器
  */
-int main()
+int main(int argc, char* argv[])
 {
     // ==================== 初始化监控器集合 ====================
     // 使用基类指针存储不同类型的监控器，实现多态
@@ -54,12 +55,24 @@ int main()
     runners_.emplace_back(new monitor::NetMonitor());           // 网络监控
 
     // ==================== 初始化RPC客户端 ====================
-    monitor::RpcClient rpc_client_;
+    // 服务器地址优先级: 命令行参数 > 环境变量 GRPC_SERVER > 默认 localhost:50051
+    std::string server_addr = "localhost:50051";
+    if (argc > 1)
+    {
+        server_addr = argv[1];
+    }
+    else if (const char* env_addr = std::getenv("GRPC_SERVER"))
+    {
+        server_addr = env_addr;
+    }
+    monitor::RpcClient rpc_client_(server_addr);
 
     // ==================== 获取主机标识 ====================
-    // 使用环境变量USER作为主机名标识
-    // 注意：Windows下是USERNAME，Linux/Unix下是USER
-    char* name = getenv("USER");
+    // 使用环境变量HOSTNAME作为主机名标识，优先于USER
+    // 可通过 MONITOR_NAME 环境变量显式指定
+    char* name = std::getenv("MONITOR_NAME");
+    if (!name) name = std::getenv("HOSTNAME");
+    if (!name) name = std::getenv("USER");
 
     // ==================== 启动监控线程 ====================
     std::unique_ptr<std::thread> thread_ = nullptr;

@@ -49,6 +49,12 @@ target_link_libraries(monitor_proto PUBLIC
     protobuf
     grpc++
     grpc
+    gpr
+    z
+    cares
+    ssl
+    crypto
+    absl_synchronization
 )
 
 # 包含目录

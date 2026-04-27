@@ -18,11 +18,18 @@ message MonitorInfo {
     repeated NetInfo net_info = 8;         // 网络接口列表
 }
 
+message AllMonitorInfo {
+    repeated MonitorInfo hosts = 1;        // 所有主机的监控数据
+}
+
 // gRPC服务定义
 service GrpcManager {
     // 设置监控信息（客户端→服务器）
     rpc SetMonitorInfo(MonitorInfo) returns (google.protobuf.Empty) {}
-    
+
     // 获取监控信息（服务器→客户端）
     rpc GetMonitorInfo(google.protobuf.Empty) returns (MonitorInfo) {}
+
+    // 获取所有主机的监控信息
+    rpc GetAllMonitorInfo(google.protobuf.Empty) returns (AllMonitorInfo) {}
 }
