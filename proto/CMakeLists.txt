@@ -44,21 +44,24 @@ file(GLOB GENERATED_HEADERS ${CMAKE_CURRENT_BINARY_DIR}/*.pb.h ${CMAKE_CURRENT_B
 # 创建库
 add_library(monitor_proto STATIC ${GENERATED_SOURCES})
 
+# 使用 pkg-config 查找 gRPC 链接参数
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GRPC REQUIRED grpc++ grpc protobuf gpr)
+
 # 链接系统库
 target_link_libraries(monitor_proto PUBLIC
-    protobuf
-    grpc++
-    grpc
-    gpr
-    z
-    cares
-    ssl
-    crypto
-    absl_synchronization
+    ${GRPC_LIBRARIES}
+)
+
+target_include_directories(monitor_proto PUBLIC
+    ${GRPC_INCLUDE_DIRS}
+)
+
+target_link_directories(monitor_proto PUBLIC
+    ${GRPC_LIBRARY_DIRS}
 )
 
 # 包含目录
 target_include_directories(monitor_proto PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR}
-    /usr/include  # 系统 protobuf 和 gRPC 头文件
 )
