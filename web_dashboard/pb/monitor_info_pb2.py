@@ -28,19 +28,20 @@ import mem_info_pb2 as mem__info__pb2
 import cpu_stat_pb2 as cpu__stat__pb2
 import cpu_softirq_pb2 as cpu__softirq__pb2
 import cpu_load_pb2 as cpu__load__pb2
+import ebpf_info_pb2 as ebpf__info__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12monitor_info.proto\x12\rmonitor.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x0enet_info.proto\x1a\x0emem_info.proto\x1a\x0e\x63pu_stat.proto\x1a\x11\x63pu_softirq.proto\x1a\x0e\x63pu_load.proto\"\xed\x01\n\x0bMonitorInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12(\n\x08soft_irq\x18\x04 \x03(\x0b\x32\x16.monitor.proto.SoftIrq\x12(\n\x08\x63pu_load\x18\x05 \x01(\x0b\x32\x16.monitor.proto.CpuLoad\x12(\n\x08\x63pu_stat\x18\x06 \x03(\x0b\x32\x16.monitor.proto.CpuStat\x12(\n\x08mem_info\x18\x07 \x01(\x0b\x32\x16.monitor.proto.MemInfo\x12(\n\x08net_info\x18\x08 \x03(\x0b\x32\x16.monitor.proto.NetInfo\";\n\x0e\x41llMonitorInfo\x12)\n\x05hosts\x18\x01 \x03(\x0b\x32\x1a.monitor.proto.MonitorInfo2\xeb\x01\n\x0bGrpcManager\x12\x46\n\x0eSetMonitorInfo\x12\x1a.monitor.proto.MonitorInfo\x1a\x16.google.protobuf.Empty\"\x00\x12\x46\n\x0eGetMonitorInfo\x12\x16.google.protobuf.Empty\x1a\x1a.monitor.proto.MonitorInfo\"\x00\x12L\n\x11GetAllMonitorInfo\x12\x16.google.protobuf.Empty\x1a\x1d.monitor.proto.AllMonitorInfo\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12monitor_info.proto\x12\rmonitor.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x0enet_info.proto\x1a\x0emem_info.proto\x1a\x0e\x63pu_stat.proto\x1a\x11\x63pu_softirq.proto\x1a\x0e\x63pu_load.proto\x1a\x0f\x65\x62pf_info.proto\"\x99\x02\n\x0bMonitorInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12(\n\x08soft_irq\x18\x04 \x03(\x0b\x32\x16.monitor.proto.SoftIrq\x12(\n\x08\x63pu_load\x18\x05 \x01(\x0b\x32\x16.monitor.proto.CpuLoad\x12(\n\x08\x63pu_stat\x18\x06 \x03(\x0b\x32\x16.monitor.proto.CpuStat\x12(\n\x08mem_info\x18\x07 \x01(\x0b\x32\x16.monitor.proto.MemInfo\x12(\n\x08net_info\x18\x08 \x03(\x0b\x32\x16.monitor.proto.NetInfo\x12*\n\tebpf_info\x18\t \x01(\x0b\x32\x17.monitor.proto.EbpfInfo\";\n\x0e\x41llMonitorInfo\x12)\n\x05hosts\x18\x01 \x03(\x0b\x32\x1a.monitor.proto.MonitorInfo2\xeb\x01\n\x0bGrpcManager\x12\x46\n\x0eSetMonitorInfo\x12\x1a.monitor.proto.MonitorInfo\x1a\x16.google.protobuf.Empty\"\x00\x12\x46\n\x0eGetMonitorInfo\x12\x16.google.protobuf.Empty\x1a\x1a.monitor.proto.MonitorInfo\"\x00\x12L\n\x11GetAllMonitorInfo\x12\x16.google.protobuf.Empty\x1a\x1d.monitor.proto.AllMonitorInfo\"\x00\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'monitor_info_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_MONITORINFO']._serialized_start=150
-  _globals['_MONITORINFO']._serialized_end=387
-  _globals['_ALLMONITORINFO']._serialized_start=389
-  _globals['_ALLMONITORINFO']._serialized_end=448
-  _globals['_GRPCMANAGER']._serialized_start=451
-  _globals['_GRPCMANAGER']._serialized_end=686
+  _globals['_MONITORINFO']._serialized_start=167
+  _globals['_MONITORINFO']._serialized_end=448
+  _globals['_ALLMONITORINFO']._serialized_start=450
+  _globals['_ALLMONITORINFO']._serialized_end=509
+  _globals['_GRPCMANAGER']._serialized_start=512
+  _globals['_GRPCMANAGER']._serialized_end=747
 # @@protoc_insertion_point(module_scope)

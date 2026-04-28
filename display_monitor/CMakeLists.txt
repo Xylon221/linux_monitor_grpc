@@ -1,8 +1,14 @@
-# 查找Qt5依赖
-find_package(Qt5 COMPONENTS Core Widgets REQUIRED)
+# 移除 Qt 相关依赖
+# find_package(Qt5 COMPONENTS Core Widgets REQUIRED)
 
-# 启用自动MOC
-set(CMAKE_AUTOMOC ON)
+# 移除 Qt 包含目录和库链接
+# ${Qt5Widgets_INCLUDE_DIRS}
+# ${Qt5Core_INCLUDE_DIRS}
+# Qt5::Widgets
+# Qt5::Core
+
+# 保留其他配置
+set(CMAKE_AUTOMOC OFF) # 关闭自动 MOC
 
 # 列出所有源文件和头文件
 set(SOURCES
@@ -28,14 +34,10 @@ add_executable(display ${SOURCES} ${HEADERS})
 target_include_directories(display PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}       # 当前目录
     ${PROJECT_SOURCE_DIR}/rpc_manager # RPC客户端头文件
-    ${Qt5Widgets_INCLUDE_DIRS}        # Qt Widgets包含目录
-    ${Qt5Core_INCLUDE_DIRS}           # Qt Core包含目录
 )
 
 # 链接库设置
 target_link_libraries(display
-    Qt5::Widgets           # Qt窗口部件
-    Qt5::Core              # Qt核心
     client                 # RPC客户端库
     monitor_proto          # Protobuf库
 )

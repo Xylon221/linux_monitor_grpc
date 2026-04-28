@@ -63,6 +63,47 @@ async def get_hosts():
         return {"hosts": []}
 
 
+@app.get("/api/memory")
+async def get_memory():
+    """返回内存监控数据"""
+    try:
+        all_data = await app.state.stub.GetAllMonitorInfo(empty_pb2.Empty())
+        memory_data = []
+        for host_info in all_data.hosts:
+            mem_info = {
+                "host": host_info.name,
+                "used_percent": host_info.memory.used_percent,
+                "total": host_info.memory.total,
+                "free": host_info.memory.free,
+                "buffers": host_info.memory.buffers,
+                "cached": host_info.memory.cached,
+            }
+            memory_data.append(mem_info)
+        return {"memory": memory_data}
+    except grpc.aio.AioRpcError as e:
+        return {"error": f"gRPC server unavailable: {e.details()}"}
+
+
+@app.get("/api/network")
+async def get_network():
+    """返回网络监控数据"""
+    try:
+        all_data = await app.state.stub.GetAllMonitorInfo(empty_pb2.Empty())
+        network_data = []
+        for host_info in all_data.hosts:
+            for net in host_info.network_interfaces:
+                net_info = {
+                    "host": host_info.name,
+                    "interface": net.name,
+                    "send_rate": net.send_rate,
+                    "rcv_rate": net.rcv_rate,
+                }
+                network_data.append(net_info)
+        return {"network": network_data}
+    except grpc.aio.AioRpcError as e:
+        return {"error": f"gRPC server unavailable: {e.details()}"}
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()

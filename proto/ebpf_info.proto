@@ -1,0 +1,19 @@
+syntax = "proto3";
+package monitor.proto;
+
+message PortStat {
+    uint32 port = 1;
+    int64 count = 2;
+}
+
+message EbpfInfo {
+    int64 established_count = 1;
+    int64 time_wait_count = 2;
+    int64 close_wait_count = 3;
+    int64 listening_count = 4;
+    int64 syn_sent_count = 5;
+    int64 fin_wait_count = 6;
+    int64 total_active = 10;
+    float new_connection_rate = 11;
+    repeated PortStat port_stats = 12;
+}

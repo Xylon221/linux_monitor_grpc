@@ -170,6 +170,22 @@ header h1 {
     <div class="card-body"><div id="chart-softirq" class="chart chart-lg"></div></div>
 </div>
 
+<div class="row">
+    <div class="card">
+        <div class="card-title">eBPF / TCP 状态变化</div>
+        <div class="card-body"><div id="chart-tcp-states" class="chart chart-sm"></div></div>
+    </div>
+    <div class="card">
+        <div class="card-title">eBPF / 新连接速率</div>
+        <div class="card-body"><div id="chart-tcp-rate" class="chart chart-sm"></div></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">eBPF / 活跃端口 (Top 10)</div>
+    <div class="card-body"><div id="chart-tcp-ports" class="chart chart-sm"></div></div>
+</div>
+
 </main>
 
 <script>
@@ -197,6 +213,9 @@ function ensureHost(name) {
             netSeries: {},
             netData: {},
             softIrqSeries: { _inited: false },
+            ebpfTcp: { established: [], timeWait: [], closeWait: [], listen: [], synSent: [], finWait: [] },
+            ebpfRate: [],
+            ebpfPorts: [],
         };
     }
     if (!hostOrder.includes(name)) {
@@ -289,7 +308,42 @@ chartSoftIrq.setOption({
     series: []
 });
 
-const allCharts = [chartCpuLoad, chartCpuUsage, chartMemGauge, chartMemDetail, chartNetwork, chartSoftIrq];
+const chartTcpStates = echarts.init(document.getElementById('chart-tcp-states'), undefined, { renderer: 'canvas' });
+chartTcpStates.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { data: ['ESTABLISHED', 'TIME_WAIT', 'CLOSE_WAIT', 'LISTEN', 'SYN_SENT', 'FIN_WAIT'], textStyle: { color: '#8899aa', fontSize: 10 } },
+    grid: { left: 50, right: 12, top: 36, bottom: 20 },
+    xAxis: { type: 'category', data: [], axisLabel: { color: '#556', fontSize: 10 } },
+    yAxis: { type: 'value', name: '变化数', nameTextStyle: { color: '#556', fontSize: 10 }, axisLabel: { color: '#889', fontSize: 10 } },
+    series: [
+        { name: 'ESTABLISHED', type: 'bar', stack: 'states', data: [], itemStyle: { color: '#6bcb77' } },
+        { name: 'TIME_WAIT', type: 'bar', stack: 'states', data: [], itemStyle: { color: '#ff6b6b' } },
+        { name: 'CLOSE_WAIT', type: 'bar', stack: 'states', data: [], itemStyle: { color: '#f59e0b' } },
+        { name: 'LISTEN', type: 'bar', stack: 'states', data: [], itemStyle: { color: '#00d2ff' } },
+        { name: 'SYN_SENT', type: 'bar', stack: 'states', data: [], itemStyle: { color: '#a66cff' } },
+        { name: 'FIN_WAIT', type: 'bar', stack: 'states', data: [], itemStyle: { color: '#f472b6' } },
+    ]
+});
+
+const chartTcpRate = echarts.init(document.getElementById('chart-tcp-rate'), undefined, { renderer: 'canvas' });
+chartTcpRate.setOption({
+    tooltip: { trigger: 'axis' },
+    grid: { left: 50, right: 12, top: 20, bottom: 20 },
+    xAxis: { type: 'category', data: [], axisLabel: { color: '#556', fontSize: 10 } },
+    yAxis: { type: 'value', name: '连接/秒', nameTextStyle: { color: '#556', fontSize: 10 }, axisLabel: { color: '#889', fontSize: 10 } },
+    series: [{ name: '新建连接速率', type: 'line', smooth: true, data: [], lineStyle: { width: 2, color: '#00d2ff' }, itemStyle: { color: '#00d2ff' }, areaStyle: { color: 'rgba(0,210,255,0.15)' } }]
+});
+
+const chartTcpPorts = echarts.init(document.getElementById('chart-tcp-ports'), undefined, { renderer: 'canvas' });
+chartTcpPorts.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: 60, right: 40, top: 10, bottom: 20 },
+    xAxis: { type: 'value', axisLabel: { color: '#889', fontSize: 10 } },
+    yAxis: { type: 'category', data: [], axisLabel: { color: '#c8d6e5', fontSize: 10 } },
+    series: [{ type: 'bar', data: [], itemStyle: { color: '#a66cff' }, barMaxWidth: 16 }]
+});
+
+const allCharts = [chartCpuLoad, chartCpuUsage, chartMemGauge, chartMemDetail, chartNetwork, chartSoftIrq, chartTcpStates, chartTcpRate, chartTcpPorts];
 window.addEventListener('resize', () => allCharts.forEach(c => c.resize()));
 
 // ─── Color palette ───
@@ -385,6 +439,28 @@ function updateHostData(hostInfo) {
                 s.netSeries[iface].recv.shift();
             }
         });
+    }
+
+    // eBPF TCP connection tracking
+    if (hostInfo.ebpf_info) {
+        const e = hostInfo.ebpf_info;
+        s.ebpfTcp.established.push(e.established_count || 0);
+        s.ebpfTcp.timeWait.push(e.time_wait_count || 0);
+        s.ebpfTcp.closeWait.push(e.close_wait_count || 0);
+        s.ebpfTcp.listen.push(e.listening_count || 0);
+        s.ebpfTcp.synSent.push(e.syn_sent_count || 0);
+        s.ebpfTcp.finWait.push(e.fin_wait_count || 0);
+        const maxLen = MAX_POINTS;
+        ['established','timeWait','closeWait','listen','synSent','finWait'].forEach(k => {
+            if (s.ebpfTcp[k].length > maxLen) s.ebpfTcp[k].shift();
+        });
+
+        s.ebpfRate.push(e.new_connection_rate || 0);
+        if (s.ebpfRate.length > maxLen) s.ebpfRate.shift();
+
+        if (e.port_stats) {
+            s.ebpfPorts = e.port_stats.slice(0, 10);
+        }
     }
 
     // SoftIRQ
@@ -498,6 +574,39 @@ function renderCurrentHostCharts() {
             });
         });
         chartNetwork.setOption({ legend: { data: legendData }, xAxis: { data: s.times }, series });
+    }
+
+    // eBPF TCP state transitions
+    if (s.ebpfTcp.established.length) {
+        chartTcpStates.setOption({
+            xAxis: { data: s.times },
+            series: [
+                { data: s.ebpfTcp.established },
+                { data: s.ebpfTcp.timeWait },
+                { data: s.ebpfTcp.closeWait },
+                { data: s.ebpfTcp.listen },
+                { data: s.ebpfTcp.synSent },
+                { data: s.ebpfTcp.finWait },
+            ]
+        });
+    }
+
+    // eBPF new connection rate
+    if (s.ebpfRate.length) {
+        chartTcpRate.setOption({
+            xAxis: { data: s.times },
+            series: [{ data: s.ebpfRate }]
+        });
+    }
+
+    // eBPF active ports
+    if (s.ebpfPorts.length) {
+        const portNames = s.ebpfPorts.map(p => p.port ? ':' + p.port : '?');
+        const portValues = s.ebpfPorts.map(p => p.count || 0);
+        chartTcpPorts.setOption({
+            yAxis: { data: portNames.reverse() },
+            series: [{ data: portValues.reverse() }]
+        });
     }
 
     // SoftIRQ

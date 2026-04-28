@@ -17,6 +17,7 @@ set(PROTO_FILES
     cpu_stat.proto
     mem_info.proto
     net_info.proto
+    ebpf_info.proto
 )
 
 # 生成所有文件

@@ -7,6 +7,7 @@
 #include "client/rpc_client.h"            // RPC客户端实现
 
 // 监控器头文件
+#include "monitor/bpf_tcp_monitor.h"      // eBPF TCP连接监控
 #include "monitor/cpu_load_monitor.h"     // CPU负载监控
 #include "monitor/cpu_softirq_monitor.h"  // CPU软中断监控
 #include "monitor/cpu_stat_monitor.h"     // CPU状态监控
@@ -53,6 +54,7 @@ int main(int argc, char* argv[])
     runners_.emplace_back(new monitor::CpuStatMonitor());       // CPU状态监控
     runners_.emplace_back(new monitor::MemMonitor());           // 内存监控
     runners_.emplace_back(new monitor::NetMonitor());           // 网络监控
+    runners_.emplace_back(new monitor::BpfTcpMonitor());        // eBPF TCP连接监控
 
     // ==================== 初始化RPC客户端 ====================
     // 服务器地址优先级: 命令行参数 > 环境变量 GRPC_SERVER > 默认 localhost:50051

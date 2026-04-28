@@ -1,7 +1,6 @@
 // 头文件保护宏，防止重复包含
 #pragma once
 
-#include <QAbstractTableModel>    // Qt抽象表格模型基类
 #include <vector>                 // C++标准向量容器
 #include "monitor_inter.h"        // 监控基础模型接口
 #include "monitor_info.grpc.pb.h" // gRPC生成代码
@@ -18,7 +17,6 @@ namespace monitor
     class NetModel : public MonitorInterModel
     {
     private:
-        Q_OBJECT  // Qt元对象系统宏，启用信号槽和反射机制
 
     public:
         /**

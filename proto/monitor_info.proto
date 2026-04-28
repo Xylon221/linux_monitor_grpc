@@ -8,6 +8,7 @@ import "mem_info.proto";
 import "cpu_stat.proto";
 import "cpu_softirq.proto";
 import "cpu_load.proto";
+import "ebpf_info.proto";
 
 message MonitorInfo {
     string name = 1;                       // 主机名
@@ -16,6 +17,7 @@ message MonitorInfo {
     repeated CpuStat cpu_stat = 6;         // CPU状态列表（每个CPU一个）
     MemInfo mem_info = 7;                  // 内存信息
     repeated NetInfo net_info = 8;         // 网络接口列表
+    EbpfInfo ebpf_info = 9;               // eBPF采集的TCP连接信息
 }
 
 message AllMonitorInfo {
