@@ -58,23 +58,12 @@ docker exec "${CONTAINER_NAME}" bash -c "
         echo '❌ RPC服务器未生成'
     fi
 
-    if [ -f 'display_monitor/display' ]; then
-        echo '✅ 显示界面: display_monitor/display'
-        file display_monitor/display
-    elif [ -f '../display_monitor/display' ]; then
-        echo '✅ 显示界面: ../display_monitor/display'
-        file ../display_monitor/display
-    else
-        echo '❌ 显示界面未生成'
-    fi
-    
     echo ''
     echo '构建完成！'
-    
+
     # 显示运行说明
     echo '=== 运行说明 ==='
     echo '1. 进入容器: ./docker/scripts/monitor_docker_into.sh'
     echo '2. 运行服务: cd /work/build && ./bin/server'
     echo '3. 运行监控: cd /work/build && ./linux_monitor/src/monitor'
-    echo '4. 运行界面: cd /work/build && ./display_monitor/display'
 "

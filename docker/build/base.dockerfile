@@ -39,17 +39,6 @@ RUN apt-get update && \
     libssl3 \
     && apt-get clean
 
-# 安装 Qt
-RUN apt-get update && \
-    apt-get install -y \
-    qtbase5-dev \
-    qtchooser \
-    qt5-qmake \
-    qtbase5-dev-tools \
-    qttools5-dev \
-    qttools5-dev-tools \
-    && apt-get clean
-
 # 安装 gRPC 和 Protobuf
 RUN apt-get update && \
     apt-get install -y \
@@ -76,31 +65,13 @@ RUN apt-get update && \
     stress \
     && apt-get clean
 
-# 安装 X11 显示支持
-RUN apt-get update && \
-    apt-get install -y \
-    libx11-xcb1 \
-    libfreetype6 \
-    libdbus-1-3 \
-    libfontconfig1 \
-    libxkbcommon0 \
-    libxkbcommon-x11-0 \
-    libgl1-mesa-glx \
-    libegl1-mesa \
-    && apt-get clean
-
 # 清理缓存
 RUN rm -rf /var/lib/apt/lists/*
-
-# 设置 Qt 环境变量
-ENV QT_QPA_PLATFORM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/qt5/plugins
-ENV QT_SELECT=qt5
 
 # 验证安装
 RUN echo "=== 验证安装 ===" && \
     echo "CMake: $(cmake --version | head -n1)" && \
     echo "g++: $(g++ --version | head -n1)" && \
-    echo "Qt: $(qmake --version | head -n1 || echo 'qmake not found')" && \
     echo "Protobuf: $(protoc --version || echo 'protoc not found')" && \
     echo "Python: $(python3 --version)"
 

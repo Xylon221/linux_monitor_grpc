@@ -13,9 +13,6 @@ include_directories(
 
 add_subdirectory(rpc_manager)
 add_subdirectory(linux_monitor)
-add_subdirectory(display_monitor)
-
 add_dependencies(client_test monitor_proto)
 add_dependencies(server monitor_proto)
 add_dependencies(monitor monitor_proto)
-add_dependencies(display monitor_proto)

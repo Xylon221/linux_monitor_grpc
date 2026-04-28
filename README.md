@@ -2,15 +2,7 @@
 
 ## 📖 项目概述
 
-**Linux 分布式监控系统** 是一个专业级、模块化的系统监控解决方案，采用现代 C++ 开发，集成了 **实时数据采集、高性能 RPC 通信和 Qt 图形界面**。系统通过 **gRPC + Protocol Buffers** 实现分布式架构，能够实时监控 CPU、内存、网络、软中断等关键系统指标，并基于 **Qt 表格模型** 提供专业的数据可视化展示。
-
-## 🎯 核心价值
-
-- **系统管理员**: 实时监控多台服务器状态，快速定位性能瓶颈
-- **开发运维**: 分析应用程序的系统资源占用，优化性能
-- **性能工程师**: 深入理解 Linux 内核各项指标含义和计算方法
-- **C++学习者**: 学习现代 C++ 项目架构、设计模式和构建系统
-- **教育研究**: 理解操作系统监控原理和分布式系统设计
+**Linux 分布式监控系统** 是一个专业级、模块化的系统监控解决方案，采用现代 C++ 开发，集成了 **实时数据采集、高性能 RPC 通信和 Web 可视化**。系统通过 **gRPC + Protocol Buffers** 实现分布式架构，能够实时监控 CPU、内存、网络、软中断等关键系统指标，并通过 **Web Dashboard** 提供数据展示。
 
 ## 🏗️ 架构设计
 
@@ -19,7 +11,7 @@
 ```
 Linux 分布式监控系统架构
 ├── 应用层 (Application Layer)
-│   ├── Qt 图形界面 (Display Monitor)
+│   ├── Web Dashboard
 │   │   ├── CPU 负载/状态监控
 │   │   ├── 内存详细统计
 │   │   ├── 网络流量监控
@@ -74,12 +66,11 @@ Linux 分布式监控系统架构
 
 ### 核心模块说明
 
-#### 1. **显示界面模块** (`display_monitor/`)
-**功能**: 提供专业的监控数据可视化界面
-- **多页面导航**: 使用 `QStackedLayout` 实现 CPU、内存、网络、软中断四个监控页面
-- **实时刷新**: 每 2 秒自动从服务器获取最新数据并更新显示
-- **表格展示**: 基于 `QAbstractTableModel` 的自定义表格模型，支持不同颜色和字体样式
-- **数据转换**: 将 Protobuf 格式的监控数据转换为 Qt 可显示的格式
+#### 1. **Web Dashboard 模块** (`web_dashboard/`)
+**功能**: 提供监控数据的 Web 可视化界面
+- **实时刷新**: 从服务器获取最新数据并更新显示
+- **多指标展示**: 覆盖 CPU、内存、网络、软中断等监控页面
+- **服务端脚本**: 通过 `main.py` 提供数据接口和页面服务
 
 #### 2. **监控客户端模块** (`linux_monitor/`)
 **功能**: 采集系统各项性能指标
@@ -209,9 +200,16 @@ float cpu_percent = busy_diff / total_diff * 100.0;  // 使用率百分比
 
 - **C++编译器**: GCC 11+
 - **构建系统**: CMake 3.15+
-- **Qt 库**: Qt Core 和 Widgets 模块
+- **Python**: 3.10+ (Web Dashboard)
 - **Protobuf/gRPC**: libprotobuf-dev, libgrpc++-dev
 - **Docker**: 容器化部署
+
+### Web Dashboard 依赖安装
+
+```bash
+cd web_dashboard
+python3 -m pip install -r requirements.txt
+```
 
 ### 快速开始
 
@@ -226,7 +224,7 @@ float cpu_percent = busy_diff / total_diff * 100.0;  // 使用率百分比
 # 3. 进入容器
 ./docker/scripts/monitor_docker_into.sh
 
-# 4. 在容器内运行，开3个窗口
+# 4. 在容器内运行，开2个窗口
 # 第1个窗口
 ./docker/scripts/monitor_docker_into.sh
 cd /work/build && ./bin/server # 启动 RPC 服务器
@@ -235,9 +233,8 @@ cd /work/build && ./bin/server # 启动 RPC 服务器
 ./docker/scripts/monitor_docker_into.sh
 cd /work/build && ./linux_monitor/src/monitor # 启动监控客户端
 
-# 第3个窗口
-./docker/scripts/monitor_docker_into.sh
-cd /work/build && ./display_monitor/display # 启动显示界面
+# Web Dashboard
+cd /work/web_dashboard && ./run.sh
 ```
 
 ## 📈 使用场景
@@ -252,7 +249,7 @@ cd /work/build && ./display_monitor/display # 启动显示界面
 - **部署**: 
   - 每台服务器运行监控客户端
   - 集中式 RPC 服务器收集数据
-  - 管理节点运行显示界面
+  - 管理节点运行 Web Dashboard
 - **优势**: 集中管理，统一视图
 
 ### 3. **开发调试**
@@ -275,9 +272,9 @@ cd /work/build && ./display_monitor/display # 启动显示界面
 // 在 linux_monitor/src/main.cpp 中
 std::this_thread::sleep_for(std::chrono::seconds(3));  // 改为 1、5、10 等
 
-// 修改显示界面刷新间隔  
-// 在 display_monitor/main.cpp 中
-std::this_thread::sleep_for(std::chrono::seconds(2));  // 改为 1、3、5 等
+// 修改 Web Dashboard 刷新间隔
+// 在 web_dashboard/main.py 中
+# TODO: 根据实现调整定时刷新间隔
 ```
 
 ### 添加新监控指标
@@ -298,15 +295,8 @@ class DiskMonitor : public MonitorInter {
     }
 };
 
-// 3. 添加显示模型
-class DiskModel : public MonitorInterModel {
-    // 实现 Qt 表格模型
-};
-
-// 4. 更新界面
-void MonitorWidget::InitDiskMonitorWidget() {
-    // 添加新的页面
-}
+// 3. 更新 Web Dashboard
+# TODO: 在 web_dashboard 中增加对应页面与数据展示
 ```
 
 ## 📊 性能数据示例
