@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
     std::unique_ptr<std::thread> thread_ = nullptr;
 
     // 使用lambda表达式创建监控线程
-    thread_ = std::make_unique<std::thread>([&]() {
+    thread_ = std::unique_ptr<std::thread>(new std::thread([&]() {
         // 线程主循环：持续监控和上报
         while (true)
         {

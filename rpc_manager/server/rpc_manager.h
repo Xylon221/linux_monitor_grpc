@@ -108,10 +108,10 @@ namespace monitor
         {
             std::lock_guard<std::mutex> lock(mutex_);
 
-            for (auto& [hostname, info] : monitor_infos_)
+            for (auto it = monitor_infos_.begin(); it != monitor_infos_.end(); ++it)
             {
                 auto* host_info = response->add_hosts();
-                *host_info = info;
+                *host_info = it->second;
             }
 
             return grpc::Status::OK;
